@@ -34,6 +34,29 @@ function dishExists(req, res, next) {
   };
   
 
+  function priceIsValidNumber(req, res, next){
+    const { data: { price }  = {} } = req.body;
+    if (price <= 0 || !Number.isInteger(price)){
+        return next({
+            status: 400,
+            message: `Dish must have a price that is an integer greater than 0`
+        });
+    }
+    next();
+  }
+
+  function dishIdMatches(req, res, next){
+    const { dishId } = req.params;
+    const { data: {id} } = req.body;
+    if (dishId !== id){
+        return next({
+            status: 400,
+            message: `Dish id does not match route id. Dish: ${id}, Route: ${dishId}`,
+        })
+    } 
+    next();
+  }
+
 //create
 function create(req, res) {
     const { data: { name, description, price, image_url } = {} } = req.body;
@@ -75,22 +98,26 @@ function list(req, res) {
   }
 
 
+
 module.exports = {
     create: [
         bodyDataHas("name"),
         bodyDataHas("description"),
         bodyDataHas("price"),
         bodyDataHas("image_url"),
+        priceIsValidNumber,
         create,
     ],
     read: [dishExists, read],
     list,
     update: [
         dishExists,
+        dishIdMatches,
         bodyDataHas("name"),
         bodyDataHas("description"),
         bodyDataHas("price"),
         bodyDataHas("image_url"),
+        priceIsValidNumber,
         update,
     ],
 }
