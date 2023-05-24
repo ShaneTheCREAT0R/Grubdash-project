@@ -8,6 +8,21 @@ const nextId = require("../utils/nextId");
 
 // TODO: Implement the /orders handlers needed to make the tests pass
 
+
+function orderExists(req, res, next){
+    const orderId = req.params.orderId;
+    res.locals.orderId = orderId;
+    const foundOrder = orders.find((order) => order.id === orderId);
+    if (foundOrder) {
+        res.locals.order = foundOrder;
+        return next()
+    }
+    next({
+        status: 404,
+        message: `Order not found: ${orderId}` 
+    });
+}
+
 function bodyDataHas(propertyName) {
     return function(req, res, next) {
         const { data = {} } = req.body;
@@ -18,28 +33,38 @@ function bodyDataHas(propertyName) {
     }
 }
 
-function dishQuantityIsValid(req, res, next) {
-    const { data: {dishes: [{quantity = {} }] }} = req.body;
-    
-    if (quantity <=0 || !Number.isInteger(quantity)){
-        return next({
-            status: 400,
-            message: `Dish ${index} must have a quantity that is an integer greater than 0`
-        })
-    }
-    next();
-}
+
 
 function dishesExist(req, res, next) {
     const { data: {dishes = {} }} = req.body;
-    if (dishes === [] || !Array.isArray(dishes)) {
+    if (dishes.length === 0 || !Array.isArray(dishes)) {
      return next({
-        status: 400,
+         status: 400,
          message: `Order must include at least one dish`,
      });
     }
     next();
 };
+
+
+
+function dishQuantityIsValid(req, res, next) {
+    const { data: {dishes = {} }} = req.body;
+    dishes.forEach((dish) => {
+       const dishQuantity = dish.quantity;
+       if (!dishQuantity || typeof dishQuantity != "number" || dishQuantity <= 0) {
+          return next({
+          status: 400,
+          message: `Dish ${dishes.indexOf(
+             dish
+          )} must have a quantity that is an integer greater than 0`,
+          });
+       }
+    });
+    next();
+}
+
+
 
 function hasBeenDelivered(req, res, next){
     const { data: {status ={} }} = req.body;
@@ -56,6 +81,7 @@ function hasBeenDelivered(req, res, next){
 function create(req, res) {
     const { data: { deliverTo, mobileNumber, status, dishes: {name, description, image_url, price, quantity} } = {} } = req.body
     const newOrder = {
+        id: nextId(),
         deliverTo,
         mobileNumber,
         status,
@@ -100,6 +126,13 @@ function update(req, res) {
     res.json({ data: order })
 }
 
+//destroy
+function destroy(req, res){
+    const index = orders.indexOf(res.locals.order);
+    orders.splice(index, 1);
+    res.sendStatus(204);
+}
+
 
 module.exports = {
     create: [
@@ -114,11 +147,16 @@ module.exports = {
         bodyDataHas("deliverTo"),
         bodyDataHas("mobileNumber"),
         bodyDataHas("dishes"),
+        bodyDataHas("status"),
         dishesExist,
         dishQuantityIsValid,
         hasBeenDelivered,
         update,
     ],
-    read,
+    read: [
+        orderExists,
+        read,
+    ],
     list,
+    destroy,
 }
