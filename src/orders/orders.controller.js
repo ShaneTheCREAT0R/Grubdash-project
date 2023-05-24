@@ -15,6 +15,7 @@ function orderExists(req, res, next){
     const foundOrder = orders.find((order) => order.id === orderId);
     if (foundOrder) {
         res.locals.order = foundOrder;
+        res.locals.orderId = orderId;
         return next()
     }
     next({
@@ -27,6 +28,7 @@ function bodyDataHas(propertyName) {
     return function(req, res, next) {
         const { data = {} } = req.body;
         if (data[propertyName]) {
+            res.locals.reqBody = data;
             return next()
         }
         next({ status: 400, message: `Order must include a ${propertyName}`})
@@ -64,6 +66,17 @@ function dishQuantityIsValid(req, res, next) {
     next();
 }
 
+const incomingStatusIsValid = (req, res, next) => {
+    const { data: { status = {} }} = req.body;
+    if (!status || status.length === 0 || status === "invalid") {
+       return next({
+          status: 400,
+          message:
+          "Order must have a status of pending, preparing, out-for-delivery, delivered",
+       });
+    }
+    next();
+ };
 
 
 function hasBeenDelivered(req, res, next){
@@ -72,6 +85,32 @@ function hasBeenDelivered(req, res, next){
         return next({
             status: 400,
             message: "A delivered order cannot be changed",
+        })
+    }
+    next();
+}
+
+function orderIdMatches(req, res, next){
+    const orderId = res.locals.orderId;
+    const reqBody = res.locals.reqBody;
+    if (reqBody.id) {
+        if (reqBody.id === orderId) {
+          return next();
+        }
+        next({
+          status: 400,
+          message: `Order id does not match route id. Order: ${reqBody.id}, Route: ${orderId}`,
+        });
+      }
+    next();
+}
+
+function statusPending(req, res, next){
+    const {status = {} } = res.locals.order;
+    if (status !== "pending"){
+        return next({
+            status: 400,
+            message: "An order cannot be deleted unless it is pending."
         })
     }
     next();
@@ -111,7 +150,7 @@ function read(req, res){
 //update
 function update(req, res) {
     const order = res.locals.order;
-    const  { data: { deliverTo, mobileNumber, status, dishes: [{name, description, image_url, price, quantity}] } = {} } = req.body;
+    const  { data: { deliverTo, mobileNumber, status, dishes: {name, description, image_url, price, quantity} } = {} } = req.body;
 
     //update the order
     order.deliverTo = deliverTo;
@@ -144,12 +183,15 @@ module.exports = {
         create,
     ],
     update: [
+        orderExists,
         bodyDataHas("deliverTo"),
         bodyDataHas("mobileNumber"),
         bodyDataHas("dishes"),
         bodyDataHas("status"),
         dishesExist,
         dishQuantityIsValid,
+        orderIdMatches,
+        incomingStatusIsValid,
         hasBeenDelivered,
         update,
     ],
@@ -158,5 +200,9 @@ module.exports = {
         read,
     ],
     list,
-    destroy,
+    destroy: [
+        orderExists,
+        statusPending,
+        destroy,
+    ],
 }

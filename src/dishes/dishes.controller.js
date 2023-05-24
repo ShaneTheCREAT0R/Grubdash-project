@@ -13,6 +13,7 @@ function bodyDataHas(propertyName) {
     return function (req, res, next) {
         const { data = {} } = req.body;
         if (data[propertyName]) {
+            res.locals.reqBody = data;
             return next();
         }
         next ({ status: 400, message: `Must include a ${propertyName}` });
@@ -25,6 +26,7 @@ function dishExists(req, res, next) {
     const foundDish = dishes.find(dish => dish.id == Number(dishId));
     if (foundDish) {
       res.locals.dish = foundDish;
+      res.locals.dishId = dishId;
       return next();
     }
     next({
@@ -46,15 +48,18 @@ function dishExists(req, res, next) {
   }
 
   function dishIdMatches(req, res, next){
-    const { dishId } = req.params;
-    const { data: {id} } = req.body;
-    if (dishId !== id){
-        return next({
-            status: 400,
-            message: `Dish id does not match route id. Dish: ${id}, Route: ${dishId}`,
-        })
-    } 
-    next();
+    const dishId = res.locals.dishId;
+    const reqBody = res.locals.reqBody;
+    if (reqBody.id){
+        if(reqBody.id === dishId){
+            return next();
+        }
+    next({
+        status: 400,
+        message: `Dish id does not match route id. Dish: ${reqBody.id}, Route: ${dishId}`,
+    })
+    }
+    return next();
   }
 
 //create
@@ -112,11 +117,11 @@ module.exports = {
     list,
     update: [
         dishExists,
-        dishIdMatches,
         bodyDataHas("name"),
         bodyDataHas("description"),
         bodyDataHas("price"),
         bodyDataHas("image_url"),
+        dishIdMatches,
         priceIsValidNumber,
         update,
     ],
